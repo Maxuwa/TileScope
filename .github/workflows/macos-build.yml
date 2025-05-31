@@ -1,0 +1,77 @@
+name: Build macOS App
+
+on:
+  push:
+    tags:
+      - 'v*' # Run when a new tag starting with 'v' is pushed (e.g., v1.0)
+  workflow_dispatch: # Allows manual triggering from the Actions tab
+
+jobs:
+  build-macos:
+    runs-on: macos-latest # Use the latest available macOS runner
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10' # Or your preferred Python version
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install pygame pygame_gui pyinstaller
+
+    - name: Build macOS .app with PyInstaller
+      run: |
+        # --add-data "source_file_or_dir:destination_in_bundle"
+        # On macOS, '.' for destination usually refers to the AppName.app/Contents/Resources/
+        # or AppName.app/Contents/MacOS/ depending on context.
+        # For theme.json to be next to the executable, we might need to adjust or
+        # ensure the script looks in the right place for bundled resources.
+        # Let's try putting it in the Resources directory, a common place for app assets.
+        # PyInstaller will put the executable in AppName.app/Contents/MacOS/
+        # The script will need to find theme.json relative to sys._MEIPASS or executable path.
+
+        pyinstaller --name TileScope \
+                    --windowed \
+                    --icon=assets/icon.icns \ # Optional: Change path if your icon is elsewhere or remove if no icon
+                    --add-data "theme.json:." \ # Bundles theme.json into the app's root (where executable is)
+                    --add-data "CONFIGURATION_GUIDE.md:." \ # If you want to bundle this too
+                    TileScope.py
+        # If you have other assets like a default image, add them with --add-data too.
+        # e.g., --add-data "default_tileset.png:."
+
+    - name: Create DMG (Disk Image) - Optional but Recommended
+      run: |
+        # Using a popular third-party tool for creating nice DMGs
+        # brew install create-dmg # This might take time if brew itself needs setup
+        # For simplicity, let's just zip the .app for now, as create-dmg might require brew
+        # If you want a proper DMG, you might need a step to install 'create-dmg'
+        # e.g., via Homebrew: brew install create-dmg
+        # Then: create-dmg "dist/TileScope.app" "dist/TileScope.dmg"
+        
+        cd dist
+        zip -r TileScope-macOS.zip TileScope.app
+      # If you install and use create-dmg:
+      # run: |
+      #   brew install create-dmg
+      #   create-dmg --volname "TileScope" \
+      #              --window-pos 200 120 \
+      #              --window-size 800 400 \
+      #              --icon-size 100 \
+      #              --icon "TileScope.app" 200 190 \
+      #              --hide-extension "TileScope.app" \
+      #              --app-drop-link 600 185 \
+      #              "TileScope.dmg" \
+      #              "dist/TileScope.app"
+
+
+    - name: Upload macOS Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: TileScope-macOS
+        path: dist/TileScope-macOS.zip # Or dist/TileScope.dmg if using create-dmg
+        # path: dist/TileScope.app # If you just want the .app folder (less common for distribution)
