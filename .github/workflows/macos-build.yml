@@ -1,0 +1,68 @@
+name: Build macOS App for TileScope
+
+on:
+  push:
+    tags:
+      - 'v*' # Run when a new tag starting with 'v' is pushed (e.g., v1.0)
+  workflow_dispatch: # Allows manual triggering from the Actions tab
+
+jobs:
+  build-macos:
+    runs-on: macos-latest # Use the latest available macOS runner
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12' # You can change this to your preferred Python 3 version
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pygame pygame_gui pyinstaller
+
+      - name: Build macOS .app with PyInstaller
+        run: |
+          # This is a comment explaining the --add-data syntax, it's not executed:
+          # --add-data "source_file_or_dir:destination_in_bundle"
+          #
+          # For theme.json to be next to the executable, we use "." as the destination.
+          # PyInstaller will place the executable in AppName.app/Contents/MacOS/
+          # Your Python script (using the resource_path function) should find theme.json.
+          #
+          # Ensure 'assets/icon.icns', 'theme.json', and 'CONFIGURATION_GUIDE.md'
+          # exist at the paths specified relative to your repository root.
+          # If you don't have an icon yet, you can remove the '--icon' line
+          # and the trailing '\' from the line above it.
+
+          echo "Starting PyInstaller build..."
+          pyinstaller --name TileScope \
+                      --windowed \
+                      --icon=assets/icon.icns \
+                      --add-data "theme.json:." \
+                      --add-data "CONFIGURATION_GUIDE.md:." \
+                      TileScope.py
+          echo "PyInstaller build finished. Check the 'dist' folder."
+          ls -l dist/ # List contents of dist to verify .app creation
+
+      - name: Create macOS Archive (Zip)
+        run: |
+          echo "Creating zip archive of the .app bundle..."
+          cd dist
+          if [ -d "TileScope.app" ]; then
+            zip -r TileScope-macOS.zip TileScope.app
+            echo "TileScope-macOS.zip created successfully."
+          else
+            echo "Error: TileScope.app not found in dist/ directory!"
+            exit 1
+          fi
+
+      - name: Upload macOS Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: TileScope-macOS-App
+          path: dist/TileScope-macOS.zip
+          if-no-files-found: error # Fail the workflow if the zip isn't found
